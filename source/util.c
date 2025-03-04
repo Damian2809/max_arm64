@@ -6,7 +6,6 @@
  * of the MIT license.  See the LICENSE file for details.
  */
 
-#include <switch.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -18,30 +17,12 @@
 
 #ifdef DEBUG_LOG
 
-static int s_nxlinkSock = -1;
-
-static void initNxLink(void) {
-  if (R_FAILED(socketInitializeDefault()))
-    return;
-  s_nxlinkSock = nxlinkStdio();
-  if (s_nxlinkSock < 0)
-    socketExit();
-}
-
-static void deinitNxLink(void) {
-  if (s_nxlinkSock >= 0) {
-    close(s_nxlinkSock);
-    socketExit();
-    s_nxlinkSock = -1;
-  }
-}
-
 void userAppInit(void) {
-  initNxLink();
+  // Initialize any logging mechanisms if needed
 }
 
 void userAppExit(void) {
-  deinitNxLink();
+  // Deinitialize any logging mechanisms if needed
 }
 
 #endif

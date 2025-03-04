@@ -13,7 +13,6 @@
 #include <string.h>
 #include <math.h>
 #include <threads.h>
-#include <switch.h>
 
 #include "../config.h"
 #include "../util.h"
@@ -29,8 +28,6 @@ extern uintptr_t __cxa_throw;
 static int *deviceChip;
 static int *deviceForm;
 static int *definedDevice;
-
-static PadState pad;
 
 static uint8_t fake_tls[0x100];
 
@@ -159,8 +156,6 @@ int WarGamepad_GetGamepadType(int padnum) {
 int WarGamepad_GetGamepadButtons(int padnum) {
   int mask = 0;
 
-  // this is called first, so we call update here
-  padUpdate(&pad);
   const u32 kdown = padGetButtons(&pad);
 
   if (kdown & HidNpadButton_A)

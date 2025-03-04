@@ -6,7 +6,6 @@
  * of the MIT license.  See the LICENSE file for details.
  */
 
-#include <switch.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,10 +51,6 @@ int NVEventEGLInit(void) {
     EGL_NONE
   };
 
-  NWindow *win = nwindowGetDefault();
-
-  nwindowSetDimensions(win, screen_width, screen_height);
-
   display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
   if (!display) {
     debugPrintf("EGL: Could not connect to display: %08x\n", eglGetError());
@@ -75,7 +70,7 @@ int NVEventEGLInit(void) {
     return 0;
   }
 
-  surface = eglCreateWindowSurface(display, eglConfig, win, NULL);
+  surface = eglCreateWindowSurface(display, eglConfig, NULL, NULL);
   if (!surface) {
     debugPrintf("EGL: Could not create surface: %08x\n", eglGetError());
     return 0;

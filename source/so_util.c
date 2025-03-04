@@ -6,7 +6,6 @@
  * of the MIT license.  See the LICENSE file for details.
  */
 
-#include <switch.h>
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
