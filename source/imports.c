@@ -25,7 +25,6 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/stat.h>
-#include <sys/reent.h>
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 
@@ -394,6 +393,10 @@ DynLibFunction dynlib_functions[] = {
   { "glEnableVertexAttribArray", (uintptr_t)&glEnableVertexAttribArray },
   { "glFinish", (uintptr_t)&glFinish },
   { "glFramebufferRenderbuffer", (uintptr_t)&glFramebufferRenderbuffer },
+  { "glFramebufferTexture2D", (uintptr_t)&glFramebufferTexture2D },
+  { "glFrontFace", (uintptr_t)&glFrontFace },
+  { "glGenBuffers", (uintptr_t)&glGenBuffers },
+  { "glGenFramebuffers", (uintptr_t)&glGenFramebuffers },
   { "glGenRenderbuffers", (uintptr_t)&glGenRenderbuffers },
   { "glGenTextures", (uintptr_t)&glGenTextures },
   { "glGetAttribLocation", (uintptr_t)&glGetAttribLocation },
