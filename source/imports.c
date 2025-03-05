@@ -180,9 +180,6 @@ DynLibFunction dynlib_functions[] = {
   { "pthread_getspecific", (uintptr_t)&ret0 },
   { "pthread_setspecific", (uintptr_t)&ret0 },
 
-  int pthread_create_fake(pthread_t *thread, const void *unused, void *(*start_routine)(void *), void *arg) {
-    return pthread_create(thread, NULL, start_routine, arg);
-	}
   { "pthread_join", (uintptr_t)&pthread_join },
   { "pthread_self", (uintptr_t)&pthread_self },
 
