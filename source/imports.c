@@ -193,8 +193,6 @@ DynLibFunction dynlib_functions[] = {
   { "pthread_mutex_lock", (uintptr_t)&pthread_mutex_lock_fake },
   { "pthread_mutex_unlock", (uintptr_t)&pthread_mutex_unlock_fake },
 
-  { "pthread_once", (uintptr_t)&pthread_once_fake },
-
   { "sched_get_priority_min", (uintptr_t)&retm1 },
 
   { "__android_log_print", (uintptr_t)__android_log_print },
