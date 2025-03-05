@@ -4,7 +4,7 @@ CFLAGS = -Wall -O2 -I.
 LDFLAGS = -lEGL -lGLESv2 -lopenal -ldl -lpthread
 
 # Source files
-SRCS = config.c error.c hooks.c imports.c main.c so_util.c util.c game.c openal.c opengl.c
+SRCS = config.c error.c imports.c main.c so_util.c util.c game.c openal.c opengl.c
 OBJS = $(SRCS:.c=.o)
 
 # Target executable

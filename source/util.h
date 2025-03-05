@@ -6,7 +6,7 @@ void userAppInit(void);
 void userAppExit(void);
 #endif
 
-int debugPrintf(const char *text, ...);
+void debugPrintf(const char *text, ...);
 
 int ret0(void);
 int ret1(void);

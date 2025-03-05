@@ -28,7 +28,7 @@
 extern uintptr_t __cxa_atexit;
 extern uintptr_t __stack_chk_fail;
 
-static char *__ctype_ = (char *)&_ctype_;
+static char *__ctype_ = (char *)&__ctype_;
 
 // Fake FILE array for stdout/stderr
 static uint8_t fake_sF[3][0x100]; // stdout, stderr, stdin
@@ -85,7 +85,13 @@ int pthread_mutex_init_fake(pthread_mutex_t **uid, const int *mutexattr) {
     if (!m) return -1;
 
     const int recursive = (mutexattr && *mutexattr == 1);
-    *m = recursive ? PTHREAD_RECURSIVE_MUTEX_INITIALIZER : PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	if (recursive) {
+		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+	}
+	pthread_mutex_init(m, &attr);
+	pthread_mutexattr_destroy(&attr);
 
     int ret = pthread_mutex_init(m, NULL);
     if (ret < 0) {
@@ -174,14 +180,9 @@ DynLibFunction dynlib_functions[] = {
   { "pthread_getspecific", (uintptr_t)&ret0 },
   { "pthread_setspecific", (uintptr_t)&ret0 },
 
-  { "pthread_cond_broadcast", (uintptr_t)&pthread_cond_broadcast_fake },
-  { "pthread_cond_destroy", (uintptr_t)&pthread_cond_destroy_fake },
-  { "pthread_cond_init", (uintptr_t)&pthread_cond_init_fake },
-  { "pthread_cond_signal", (uintptr_t)&pthread_cond_signal_fake },
-  { "pthread_cond_timedwait", (uintptr_t)&pthread_cond_timedwait_fake },
-  { "pthread_cond_wait", (uintptr_t)&pthread_cond_wait_fake },
-
-  { "pthread_create", (uintptr_t)&pthread_create_fake },
+  int pthread_create_fake(pthread_t *thread, const void *unused, void *(*start_routine)(void *), void *arg) {
+    return pthread_create(thread, NULL, start_routine, arg);
+	}
   { "pthread_join", (uintptr_t)&pthread_join },
   { "pthread_self", (uintptr_t)&pthread_self },
 
@@ -201,7 +202,7 @@ DynLibFunction dynlib_functions[] = {
 
   { "__android_log_print", (uintptr_t)__android_log_print },
 
-  { "__errno_location", (uintptr_t)errno },
+  { "__errno_location", (uintptr_t)&__errno_location },
 
   { "__stack_chk_fail", (uintptr_t)&__stack_chk_fail },
   // freezes with real __stack_chk_guard
@@ -428,7 +429,6 @@ DynLibFunction dynlib_functions[] = {
   { "wcrtomb", (uintptr_t)&wcrtomb },
   { "wcslen", (uintptr_t)&wcslen },
   { "btowc", (uintptr_t)&btowc },
-};
 };
 
 size_t dynlib_numfunctions = sizeof(dynlib_functions) / sizeof(*dynlib_functions);
