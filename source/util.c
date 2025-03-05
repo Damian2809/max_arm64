@@ -1,11 +1,3 @@
-/* util.c -- misc utility functions
- *
- * Copyright (C) 2021 fgsfds, Andy Nguyen
- *
- * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -18,19 +10,20 @@
 #ifdef DEBUG_LOG
 
 void userAppInit(void) {
-  // Initialize any logging mechanisms if needed
+  // I SHOULD DO SOMETHING HERE BUT I DONT CARE
 }
 
 void userAppExit(void) {
-  // Deinitialize any logging mechanisms if needed
+  // FUCK YOU, IDK IF I NEED YOU
 }
 
 #endif
 
-int debugPrintf(char *text, ...) {
+int debugPrintf(const char *text, ...) {
 #ifdef DEBUG_LOG
   va_list list;
 
+  // Log to a file, that is really stupid to do and will probably fuck up everything
   FILE *f = fopen(LOG_NAME, "a");
   if (f) {
     va_start(list, text);
@@ -39,6 +32,7 @@ int debugPrintf(char *text, ...) {
     fclose(f);
   }
 
+  // Log to the console
   va_start(list, text);
   vprintf(text, list);
   va_end(list);

@@ -1,11 +1,3 @@
-/* imports.c -- .so import resolution
- *
- * Copyright (C) 2021 fgsfds, Andy Nguyen
- *
- * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
- */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -25,214 +17,147 @@
 #include <time.h>
 #include <sys/time.h>
 #include <sys/stat.h>
+#include <dlfcn.h> // For dynamic linking
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 
 #include "config.h"
-#include "so_util.h"
+#include "so_util.h" // Replace with Linux-compatible dynamic linking
 #include "util.h"
 
 extern uintptr_t __cxa_atexit;
-
 extern uintptr_t __stack_chk_fail;
 
 static char *__ctype_ = (char *)&_ctype_;
 
-// this is supposed to be an array of FILEs, which have a different size in libMaxPayne
-// instead use it to determine whether it's trying to print to stdout/stderr
+// Fake FILE array for stdout/stderr
 static uint8_t fake_sF[3][0x100]; // stdout, stderr, stdin
 
 static uint64_t __stack_chk_guard_fake = 0x4242424242424242;
 
 FILE *stderr_fake = (FILE *)0x1337;
 
+// Debug print function for Linux
+void debugPrintf(const char *fmt, ...) {
+    va_list list;
+    va_start(list, fmt);
+    vprintf(fmt, list);
+    va_end(list);
+}
+
 void __assert2(const char *file, int line, const char *func, const char *expr) {
-  debugPrintf("assertion failed:\n%s:%d (%s): %s\n", file, line, func, expr);
-  assert(0);
+    debugPrintf("assertion failed:\n%s:%d (%s): %s\n", file, line, func, expr);
+    assert(0);
 }
 
 int __android_log_print(int prio, const char *tag, const char *fmt, ...) {
 #ifdef DEBUG_LOG
-  va_list list;
-  static char string[0x1000];
+    va_list list;
+    static char string[0x1000];
 
-  va_start(list, fmt);
-  vsnprintf(string, sizeof(string), fmt, list);
-  va_end(list);
+    va_start(list, fmt);
+    vsnprintf(string, sizeof(string), fmt, list);
+    va_end(list);
 
-  debugPrintf("%s: %s\n", tag, string);
+    debugPrintf("%s: %s\n", tag, string);
 #endif
-  return 0;
+    return 0;
 }
 
 int fake_fprintf(FILE *stream, const char *fmt, ...) {
-  int ret = 0;
+    int ret = 0;
 #ifdef DEBUG_LOG
-  va_list list;
-  static char string[0x1000];
+    va_list list;
+    static char string[0x1000];
 
-  va_start(list, fmt);
-  ret = vsnprintf(string, sizeof(string), fmt, list);
-  va_end(list);
+    va_start(list, fmt);
+    ret = vsnprintf(string, sizeof(string), fmt, list);
+    va_end(list);
 
-  debugPrintf("%s", string);
+    debugPrintf("%s", string);
 #endif
-  return ret;
+    return ret;
 }
 
-// pthread stuff
-// have to wrap it since struct sizes are different
-
+// pthread wrappers for Linux
 int pthread_mutex_init_fake(pthread_mutex_t **uid, const int *mutexattr) {
-  pthread_mutex_t *m = calloc(1, sizeof(pthread_mutex_t));
-  if (!m) return -1;
+    pthread_mutex_t *m = calloc(1, sizeof(pthread_mutex_t));
+    if (!m) return -1;
 
-  const int recursive = (mutexattr && *mutexattr == 1);
-  *m = recursive ? PTHREAD_RECURSIVE_MUTEX_INITIALIZER : PTHREAD_MUTEX_INITIALIZER;
+    const int recursive = (mutexattr && *mutexattr == 1);
+    *m = recursive ? PTHREAD_RECURSIVE_MUTEX_INITIALIZER : PTHREAD_MUTEX_INITIALIZER;
 
-  int ret = pthread_mutex_init(m, NULL);
-  if (ret < 0) {
-    free(m);
-    return -1;
-  }
+    int ret = pthread_mutex_init(m, NULL);
+    if (ret < 0) {
+        free(m);
+        return -1;
+    }
 
-  *uid = m;
-
-  return 0;
+    *uid = m;
+    return 0;
 }
 
 int pthread_mutex_destroy_fake(pthread_mutex_t **uid) {
-  if (uid && *uid && (uintptr_t)*uid > 0x8000) {
-    pthread_mutex_destroy(*uid);
-    free(*uid);
-    *uid = NULL;
-  }
-  return 0;
+    if (uid && *uid && (uintptr_t)*uid > 0x8000) {
+        pthread_mutex_destroy(*uid);
+        free(*uid);
+        *uid = NULL;
+    }
+    return 0;
 }
 
 int pthread_mutex_lock_fake(pthread_mutex_t **uid) {
-  int ret = 0;
-  if (!*uid) {
-    ret = pthread_mutex_init_fake(uid, NULL);
-  } else if ((uintptr_t)*uid == 0x4000) {
-    int attr = 1; // recursive
-    ret = pthread_mutex_init_fake(uid, &attr);
-  }
-  if (ret < 0) return ret;
-  return pthread_mutex_lock(*uid);
+    int ret = 0;
+    if (!*uid) {
+        ret = pthread_mutex_init_fake(uid, NULL);
+    } else if ((uintptr_t)*uid == 0x4000) {
+        int attr = 1; // recursive
+        ret = pthread_mutex_init_fake(uid, &attr);
+    }
+    if (ret < 0) return ret;
+    return pthread_mutex_lock(*uid);
 }
 
 int pthread_mutex_unlock_fake(pthread_mutex_t **uid) {
-  int ret = 0;
-  if (!*uid) {
-    ret = pthread_mutex_init_fake(uid, NULL);
-  } else if ((uintptr_t)*uid == 0x4000) {
-    int attr = 1; // recursive
-    ret = pthread_mutex_init_fake(uid, &attr);
-  }
-  if (ret < 0) return ret;
-  return pthread_mutex_unlock(*uid);
+    int ret = 0;
+    if (!*uid) {
+        ret = pthread_mutex_init_fake(uid, NULL);
+    } else if ((uintptr_t)*uid == 0x4000) {
+        int attr = 1; // recursive
+        ret = pthread_mutex_init_fake(uid, &attr);
+    }
+    if (ret < 0) return ret;
+    return pthread_mutex_unlock(*uid);
 }
 
-int pthread_cond_init_fake(pthread_cond_t **cnd, const int *condattr) {
-  pthread_cond_t *c = calloc(1, sizeof(pthread_cond_t));
-  if (!c) return -1;
-
-  *c = PTHREAD_COND_INITIALIZER;
-
-  int ret = pthread_cond_init(c, NULL);
-  if (ret < 0) {
-    free(c);
-    return -1;
-  }
-
-  *cnd = c;
-
-  return 0;
-}
-
-int pthread_cond_broadcast_fake(pthread_cond_t **cnd) {
-  if (!*cnd) {
-    if (pthread_cond_init_fake(cnd, NULL) < 0)
-      return -1;
-  }
-  return pthread_cond_broadcast(*cnd);
-}
-
-int pthread_cond_signal_fake(pthread_cond_t **cnd) {
-  if (!*cnd) {
-    if (pthread_cond_init_fake(cnd, NULL) < 0)
-      return -1;
-  };
-  return pthread_cond_signal(*cnd);
-}
-
-int pthread_cond_destroy_fake(pthread_cond_t **cnd) {
-  if (cnd && *cnd) {
-    pthread_cond_destroy(*cnd);
-    free(*cnd);
-    *cnd = NULL;
-  }
-  return 0;
-}
-
-int pthread_cond_wait_fake(pthread_cond_t **cnd, pthread_mutex_t **mtx) {
-  if (!*cnd) {
-    if (pthread_cond_init_fake(cnd, NULL) < 0)
-      return -1;
-  }
-  return pthread_cond_wait(*cnd, *mtx);
-}
-
-int pthread_cond_timedwait_fake(pthread_cond_t **cnd, pthread_mutex_t **mtx, const struct timespec *t) {
-  if (!*cnd) {
-    if (pthread_cond_init_fake(cnd, NULL) < 0)
-      return -1;
-  }
-  return pthread_cond_timedwait(*cnd, *mtx, t);
-}
-
-int pthread_once_fake(volatile int *once_control, void (*init_routine) (void)) {
-  if (!once_control || !init_routine)
-    return -1;
-  if (__sync_lock_test_and_set(once_control, 1) == 0)
-    (*init_routine)();
-  return 0;
-}
-
-// pthread_t is an unsigned int, so it should be fine
-// TODO: probably shouldn't assume default attributes
-int pthread_create_fake(pthread_t *thread, const void *unused, void *entry, void *arg) {
-  return pthread_create(thread, NULL, entry, arg);
-}
-
-// GL stuff
-
+// GL hooks
 void glGetShaderInfoLogHook(GLuint shader, GLsizei maxLength, GLsizei *length, GLchar *infoLog) {
-  glGetShaderInfoLog(shader, maxLength, length, infoLog);
-  debugPrintf("shader info log:\n%s\n", infoLog);
+    glGetShaderInfoLog(shader, maxLength, length, infoLog);
+    debugPrintf("shader info log:\n%s\n", infoLog);
 }
 
 void glCompressedTexImage2DHook(GLenum target, GLint level, GLenum format, GLsizei width, GLsizei height, GLint border, GLsizei imageSize, const void *data) {
-  // don't upload mips
-  if (level == 0)
-    glCompressedTexImage2D(target, level, format, width, height, border, imageSize, data);
+    // don't upload mips
+    if (level == 0)
+        glCompressedTexImage2D(target, level, format, width, height, border, imageSize, data);
 }
 
 void glTexParameteriHook(GLenum target, GLenum param, GLint val) {
-  // force trilinear filtering instead of bilinear+nearest mipmap
-  if (val == GL_LINEAR_MIPMAP_NEAREST)
-    val = GL_LINEAR_MIPMAP_LINEAR;
-  glTexParameteri(target, param, val);
+    // force trilinear filtering instead of bilinear+nearest mipmap
+    if (val == GL_LINEAR_MIPMAP_NEAREST)
+        val = GL_LINEAR_MIPMAP_LINEAR;
+    glTexParameteri(target, param, val);
 }
 
-// import table
-
+// Import table
 DynLibFunction dynlib_functions[] = {
-  { "__sF", (uintptr_t)&fake_sF },
-  { "__cxa_atexit", (uintptr_t)&__cxa_atexit },
-
-  { "stderr", (uintptr_t)&stderr_fake },
+    { "__sF", (uintptr_t)&fake_sF },
+    { "__cxa_atexit", (uintptr_t)&__cxa_atexit },
+    { "stderr", (uintptr_t)&stderr_fake },
+    { "__android_log_print", (uintptr_t)__android_log_print },
+    { "__stack_chk_fail", (uintptr_t)&__stack_chk_fail },
+    { "__stack_chk_guard", (uintptr_t)&__stack_chk_guard_fake },
+    { "_ctype_", (uintptr_t)&__ctype_ },
 
   { "AAssetManager_open", (uintptr_t)&ret0 },
   { "AAssetManager_fromJava", (uintptr_t)&ret0 },
@@ -276,7 +201,7 @@ DynLibFunction dynlib_functions[] = {
 
   { "__android_log_print", (uintptr_t)__android_log_print },
 
-  { "__errno", (uintptr_t)&__errno },
+  { "__errno_location", (uintptr_t)errno },
 
   { "__stack_chk_fail", (uintptr_t)&__stack_chk_fail },
   // freezes with real __stack_chk_guard
@@ -504,13 +429,14 @@ DynLibFunction dynlib_functions[] = {
   { "wcslen", (uintptr_t)&wcslen },
   { "btowc", (uintptr_t)&btowc },
 };
+};
 
 size_t dynlib_numfunctions = sizeof(dynlib_functions) / sizeof(*dynlib_functions);
 
 void update_imports(void) {
-  // only use the hooks if the relevant config options are enabled to avoid possible overhead
-  if (config.disable_mipmaps)
-    so_find_import(dynlib_functions, dynlib_numfunctions, "glCompressedTexImage2D")->func = (uintptr_t)glCompressedTexImage2DHook;
-  if (config.trilinear_filter)
-    so_find_import(dynlib_functions, dynlib_numfunctions, "glTexParameteri")->func = (uintptr_t)glTexParameteriHook;
+    // Apply hooks based on config
+    if (config.disable_mipmaps)
+        so_find_import(dynlib_functions, dynlib_numfunctions, "glCompressedTexImage2D")->func = (uintptr_t)glCompressedTexImage2DHook;
+    if (config.trilinear_filter)
+        so_find_import(dynlib_functions, dynlib_numfunctions, "glTexParameteri")->func = (uintptr_t)glTexParameteriHook;
 }

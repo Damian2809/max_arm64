@@ -13,6 +13,19 @@
 
 #include "config.h"
 
+// Replacement for strlcpy if not available
+#ifndef strlcpy
+size_t strlcpy(char *dest, const char *src, size_t size) {
+  size_t ret = strlen(src);
+  if (size) {
+    size_t len = (ret >= size) ? size - 1 : ret;
+    memcpy(dest, src, len);
+    dest[len] = '\0';
+  }
+  return ret;
+}
+#endif
+
 #define CONFIG_VARS \
   CONFIG_VAR_INT(screen_width); \
   CONFIG_VAR_INT(screen_height); \

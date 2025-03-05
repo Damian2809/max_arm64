@@ -1,11 +1,3 @@
-/* main.c
- *
- * Copyright (C) 2021 fgsfds, Andy Nguyen
- *
- * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
- */
-
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -13,11 +5,11 @@
 #include <sys/mman.h>
 #include <stdio.h>
 #include <fcntl.h>
+#include <dlfcn.h> // For dynamic linking
 
 #include "config.h"
 #include "util.h"
 #include "error.h"
-#include "so_util.h"
 #include "hooks.h"
 #include "imports.h"
 
@@ -79,16 +71,25 @@ int main(void) {
     printf(" lib base = %p\n", heap_so_base);
     printf("  lib max = %u KB\n", heap_so_limit / 1024);
 
-    if (so_load(SO_NAME, heap_so_base, heap_so_limit) < 0)
-        fatal_error("Could not load\n%s.", SO_NAME);
+    // Load the shared library
+    void *handle = dlopen(SO_NAME, RTLD_LAZY);
+    if (!handle) {
+        fatal_error("Could not load\n%s: %s", SO_NAME, dlerror());
+    }
 
     // won't save without it
     mkdir("savegames", 0777);
 
     update_imports();
 
-    so_relocate();
-    so_resolve(dynlib_functions, dynlib_numfunctions, 1);
+    // Resolve functions
+    uint32_t (*initGraphics)(void) = dlsym(handle, "_Z12initGraphicsv");
+    uint32_t (*ShowJoystick)(int show) = dlsym(handle, "_Z12ShowJoystickb");
+    int (*NVEventAppMain)(int argc, char *argv[]) = dlsym(handle, "_Z14NVEventAppMainiPPc");
+
+    if (!initGraphics || !ShowJoystick || !NVEventAppMain) {
+        fatal_error("Could not resolve required functions: %s", dlerror());
+    }
 
     patch_openal();
     patch_opengl();
@@ -97,24 +98,26 @@ int main(void) {
     // can't set it in the initializer because it's not constant
     stderr_fake = stderr;
 
-    strcpy((char *)so_find_addr("StorageRootBuffer"), ".");
-    *(uint8_t *)so_find_addr("IsAndroidPaused") = 0;
-    *(uint8_t *)so_find_addr("UseRGBA8") = 1; // RGB565 FBOs suck
+    // Set up game-specific variables
+    char *storageRootBuffer = dlsym(handle, "StorageRootBuffer");
+    uint8_t *isAndroidPaused = dlsym(handle, "IsAndroidPaused");
+    uint8_t *useRGBA8 = dlsym(handle, "UseRGBA8");
 
-    uint32_t (* initGraphics)(void) = (void *)so_find_addr_rx("_Z12initGraphicsv");
-    uint32_t (* ShowJoystick)(int show) = (void *)so_find_addr_rx("_Z12ShowJoystickb");
-    int (* NVEventAppMain)(int argc, char *argv[]) = (void *)so_find_addr_rx("_Z14NVEventAppMainiPPc");
+    if (storageRootBuffer && isAndroidPaused && useRGBA8) {
+        strcpy(storageRootBuffer, ".");
+        *isAndroidPaused = 0;
+        *useRGBA8 = 1; // RGB565 FBOs suck
+    } else {
+        fatal_error("Could not resolve game-specific variables: %s", dlerror());
+    }
 
-    so_finalize();
-    so_flush_caches();
-
-    so_execute_init_array();
-
-    so_free_temp();
-
+    // Initialize graphics and start the game
     initGraphics();
     ShowJoystick(0);
     NVEventAppMain(0, NULL);
+
+    // Clean up
+    dlclose(handle);
 
     return 0;
 }

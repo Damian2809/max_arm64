@@ -1,17 +1,12 @@
-/* so_util.c -- utils to load and hook .so modules
- *
- * Copyright (C) 2021 Andy Nguyen, fgsfds
- *
- * This software may be modified and distributed under the terms
- * of the MIT license.  See the LICENSE file for details.
- */
-
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <malloc.h>
 #include <elf.h>
+#include <sys/mman.h>
+#include <dlfcn.h>
+#include <unistd.h>
 
 #include "config.h"
 #include "so_util.h"
@@ -27,7 +22,6 @@ size_t data_size;
 
 static void *load_base, *load_virtbase;
 static size_t load_size;
-static VirtmemReservation *load_memrv;
 
 static void *so_base;
 
@@ -74,8 +68,7 @@ void hook_arm64(uintptr_t addr, uintptr_t dst) {
 }
 
 void so_flush_caches(void) {
-  armDCacheFlush(load_virtbase, load_size);
-  armICacheInvalidate(load_virtbase, load_size);
+  __builtin___clear_cache((char *)load_virtbase, (char *)load_virtbase + load_size);
 }
 
 void so_free_temp(void) {
@@ -84,22 +77,10 @@ void so_free_temp(void) {
 }
 
 void so_finalize(void) {
-  Result rc = 0;
-
-  // map the entire thing as code memory
-  rc = svcMapProcessCodeMemory(envGetOwnProcessHandle(), (u64)load_virtbase, (u64)load_base, load_size);
-  if (R_FAILED(rc)) fatal_error("Error: svcMapProcessCodeMemory failed:\n%08x", rc);
-
-  // map code sections as R+X
-  const u64 text_asize = ALIGN_MEM(text_size, 0x1000); // align to page
-  rc = svcSetProcessMemoryPermission(envGetOwnProcessHandle(), (u64)text_virtbase, text_asize, Perm_Rx);
-  if (R_FAILED(rc)) fatal_error("Error: could not map %u bytes of RX memory at %p:\n%08x", text_asize, text_virtbase, rc);
-
-  // map the rest as R+W
-  const u64 rest_asize = load_size - text_asize;
-  const uintptr_t rest_virtbase = (uintptr_t)text_virtbase + text_asize;
-  rc = svcSetProcessMemoryPermission(envGetOwnProcessHandle(), rest_virtbase, rest_asize, Perm_Rw);
-  if (R_FAILED(rc)) fatal_error("Error: could not map %u bytes of RW memory at %p (%p) (2):\n%08x", rest_asize, data_virtbase, rest_virtbase, rc);
+  // Map the entire thing as executable memory
+  if (mprotect(load_virtbase, load_size, PROT_READ | PROT_WRITE | PROT_EXEC) < 0) {
+    fatal_error("Error: mprotect failed for %p: %s", load_virtbase, strerror(errno));
+  }
 }
 
 int so_load(const char *filename, void *base, size_t max_size) {
@@ -135,55 +116,54 @@ int so_load(const char *filename, void *base, size_t max_size) {
   sec_hdr = (Elf64_Shdr *)((uintptr_t)so_base + elf_hdr->e_shoff);
   shstrtab = (char *)((uintptr_t)so_base + sec_hdr[elf_hdr->e_shstrndx].sh_offset);
 
-  // calculate total size of the LOAD segments
+  // Calculate total size of the LOAD segments
   for (int i = 0; i < elf_hdr->e_phnum; i++) {
     if (prog_hdr[i].p_type == PT_LOAD) {
       const size_t prog_size = ALIGN_MEM(prog_hdr[i].p_memsz, prog_hdr[i].p_align);
-      // get the segment numbers of text and data segments
+      // Get the segment numbers of text and data segments
       if ((prog_hdr[i].p_flags & PF_X) == PF_X) {
         text_segno = i;
       } else {
-        // assume data has to be after text
+        // Assume data has to be after text
         if (text_segno < 0)
           goto err_free_so;
         data_segno = i;
-        // since data is after text, total program size = last_data_offset + last_data_aligned_size
+        // Since data is after text, total program size = last_data_offset + last_data_aligned_size
         load_size = prog_hdr[i].p_vaddr + prog_size;
       }
     }
   }
 
-  // align total size to page size
+  // Align total size to page size
   load_size = ALIGN_MEM(load_size, 0x1000);
   if (load_size > max_size) {
     res = -3;
     goto err_free_so;
   }
 
-  // allocate space for all load segments (align to page size)
-  // TODO: find out a way to allocate memory that doesn't fuck with the heap
+  // Allocate space for all load segments (align to page size)
   load_base = base;
   if (!load_base) goto err_free_so;
   memset(load_base, 0, load_size);
 
-  // reserve virtual memory space for the entire LOAD zone while we're fucking with the ELF
-  virtmemLock();
-  load_virtbase = virtmemFindCodeMemory(load_size, 0x1000);
-  load_memrv = virtmemAddReservation(load_virtbase, load_size);
-  virtmemUnlock();
+  // Reserve virtual memory space for the entire LOAD zone
+  load_virtbase = mmap(NULL, load_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (load_virtbase == MAP_FAILED) {
+    fatal_error("Error: mmap failed for %zu bytes: %s", load_size, strerror(errno));
+  }
 
   debugPrintf("load base = %p\n", load_virtbase);
 
-  // copy segments to where they belong
+  // Copy segments to where they belong
 
-  // text
+  // Text
   text_size = prog_hdr[text_segno].p_memsz;
   text_virtbase = (void *)(prog_hdr[text_segno].p_vaddr + (Elf64_Addr)load_virtbase);
   text_base =     (void *)(prog_hdr[text_segno].p_vaddr + (Elf64_Addr)load_base    );
   prog_hdr[text_segno].p_vaddr = (Elf64_Addr)text_virtbase;
   memcpy(text_base, (void *)((uintptr_t)so_base + prog_hdr[text_segno].p_offset), prog_hdr[text_segno].p_filesz);
 
-  // data
+  // Data
   data_size = prog_hdr[data_segno].p_memsz;
   data_virtbase = (void *)(prog_hdr[data_segno].p_vaddr + (Elf64_Addr)load_virtbase);
   data_base     = (void *)(prog_hdr[data_segno].p_vaddr + (Elf64_Addr)load_base    );
@@ -211,10 +191,7 @@ int so_load(const char *filename, void *base, size_t max_size) {
   return 0;
 
 err_free_load:
-  virtmemLock();
-  virtmemRemoveReservation(load_memrv);
-  virtmemUnlock();
-  free(load_base);
+  munmap(load_virtbase, load_size);
 err_free_so:
   free(so_base);
 
@@ -233,12 +210,10 @@ int so_relocate(void) {
         int type = ELF64_R_TYPE(rels[j].r_info);
         switch (type) {
           case R_AARCH64_ABS64:
-            // FIXME: = or += ?
             *ptr = (uintptr_t)text_virtbase + sym->st_value + rels[j].r_addend;
             break;
 
           case R_AARCH64_RELATIVE:
-            // sometimes the value of r_addend is also at *ptr
             *ptr = (uintptr_t)text_virtbase + rels[j].r_addend;
             break;
 
@@ -276,7 +251,7 @@ int so_resolve(DynLibFunction *funcs, int num_funcs, int taint_missing_imports) 
           case R_AARCH64_JUMP_SLOT:
           {
             if (sym->st_shndx == SHN_UNDEF) {
-              // make it crash for debugging
+              // Make it crash for debugging
               if (taint_missing_imports)
                 *ptr = rels[j].r_offset;
 
@@ -371,20 +346,14 @@ int so_unload(void) {
     return -1;
 
   if (so_base) {
-    // someone forgot to free the temp data
+    // Someone forgot to free the temp data
     so_free_temp();
   }
 
-  // remap text as RW
-  const u64 text_asize = ALIGN_MEM(text_size, 0x1000); // align to page
-  svcSetProcessMemoryPermission(envGetOwnProcessHandle(), (u64)text_virtbase, text_asize, Perm_Rw);
-  // unmap everything
-  svcUnmapProcessCodeMemory(envGetOwnProcessHandle(), (u64)load_virtbase, (u64)load_base, load_size);
-
-  // release virtual address range
-  virtmemLock();
-  virtmemRemoveReservation(load_memrv);
-  virtmemUnlock();
+  // Unmap the memory
+  if (munmap(load_virtbase, load_size) < 0) {
+    fatal_error("Error: munmap failed for %p: %s", load_virtbase, strerror(errno));
+  }
 
   return 0;
 }
