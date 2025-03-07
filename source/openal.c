@@ -10,8 +10,8 @@
 #include <AL/alext.h>
 #include <AL/efx.h>
 
-#include "../util.h"
-#include "../so_util.h"
+#include "util.h"
+#include "so_util.h"
 
 static ALCcontext *al_ctx = NULL;
 static ALCdevice *al_dev = NULL;

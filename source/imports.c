@@ -37,13 +37,6 @@ static uint64_t __stack_chk_guard_fake = 0x4242424242424242;
 
 FILE *stderr_fake = (FILE *)0x1337;
 
-// Debug print function for Linux
-void debugPrintf(const char *fmt, ...) {
-    va_list list;
-    va_start(list, fmt);
-    vprintf(fmt, list);
-    va_end(list);
-}
 
 void __assert2(const char *file, int line, const char *func, const char *expr) {
     debugPrintf("assertion failed:\n%s:%d (%s): %s\n", file, line, func, expr);

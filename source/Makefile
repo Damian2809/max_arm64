@@ -1,7 +1,7 @@
 # Compiler and flags
 CC = aarch64-linux-gnu-gcc
 CFLAGS = -Wall -O2 -I.
-LDFLAGS = -lEGL -lGLESv2 -lopenal -ldl -lpthread
+LDFLAGS = -lEGL -lGLESv2 -lopenal -ldl -lpthread -lm -lstdc++
 
 # Source files
 SRCS = config.c error.c imports.c main.c so_util.c util.c game.c openal.c opengl.c

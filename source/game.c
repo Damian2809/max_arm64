@@ -8,10 +8,10 @@
 #include <unistd.h>
 #include <dlfcn.h>
 
-#include "../config.h"
-#include "../util.h"
-#include "../so_util.h"
-#include "../hooks.h"
+#include "config.h"
+#include "util.h"
+#include "so_util.h"
+#include "hooks.h"
 
 #define APK_PATH "main.obb"
 

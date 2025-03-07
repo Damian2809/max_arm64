@@ -16,10 +16,6 @@
 static void *heap_so_base = NULL;
 static size_t heap_so_limit = 0;
 
-// Screen dimensions, probably stupid because most devices are 640x480
-int screen_width = 1280;
-int screen_height = 720;
-
 static void check_data(void) {
     const char *files[] = {
         "MaxPayneSoundsv2.msf",

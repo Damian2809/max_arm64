@@ -13,6 +13,7 @@
 #include "util.h"
 #include "error.h"
 #include "elf.h"
+#include <errno.h>
 
 void *text_base, *text_virtbase;
 size_t text_size;

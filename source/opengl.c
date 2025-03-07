@@ -5,9 +5,9 @@
 #include <EGL/eglext.h>
 #include <GLES2/gl2.h>
 
-#include "../config.h"
-#include "../util.h"
-#include "../so_util.h"
+#include "config.h"
+#include "util.h"
+#include "so_util.h"
 
 static EGLDisplay display = NULL;
 static EGLSurface surface = NULL;
