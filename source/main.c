@@ -64,8 +64,10 @@ int main(void) {
     printf(" lib base = %p\n", heap_so_base);
     printf("  lib max = %zu KB\n", heap_so_limit / 1024);
 
-    if (so_load(SO_NAME, heap_so_base, heap_so_limit) < 0)
-		fatal_error("Could not load\n%s.", SO_NAME);
+    void *handle = dlopen(SO_NAME, RTLD_LAZY);
+    if (!handle) {
+        fatal_error("Could not load\n%s: %s", SO_NAME, dlerror());
+    }
 
     mkdir("savegames", 0777);
 
